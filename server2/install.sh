@@ -49,11 +49,15 @@ echo "Proceeding with installation..."
 # Update system
 echo "Updating system packages..."
 apt-get update -y
-apt-get upgrade -y
+
+# Set non-interactive mode to avoid configuration prompts
+export DEBIAN_FRONTEND=noninteractive
+# Keep existing configuration files during upgrade
+apt-get upgrade -y -o Dpkg::Options::="--force-confold"
 
 # Install squid
 echo "Installing Squid proxy..."
-apt-get install -y squid
+apt-get install -y squid -o Dpkg::Options::="--force-confold"
 
 # Backup original config
 echo "Backing up original squid configuration..."
@@ -62,44 +66,14 @@ cp /etc/squid/squid.conf /etc/squid/squid.conf.backup
 # Create new squid configuration
 echo "Creating VPN server2 configuration..."
 cat > /etc/squid/squid.conf << EOF
-# VPN Server2 (Entry Point) Configuration
+# VPN Server2 (Entry Point) - Minimal Working Configuration
 # This server forwards traffic to Server1 ($SERVER1_IP)
 
-# Allow access from all internal networks
-acl localnet src 10.0.0.0/8
-acl localnet src 172.16.0.0/12
-acl localnet src 192.168.0.0/16
-
-# Allow HTTP and HTTPS
-acl SSL_ports port 443
-acl Safe_ports port 80          # http
-acl Safe_ports port 443         # https
-acl Safe_ports port 8080        # http-alt
-acl Safe_ports port 21          # ftp
-acl Safe_ports port 22          # ssh
-acl Safe_ports port 873         # rsync
-acl Safe_ports port 1025-65535  # unregistered ports
-acl CONNECT method CONNECT
-
-# Deny requests to certain unsafe ports
-http_access deny !Safe_ports
-
-# Deny CONNECT to other than secure SSL ports
-http_access deny CONNECT !SSL_ports
-
-# Allow localhost manager access
-http_access allow localhost manager
-http_access deny manager
-
-# Allow access from local networks
-http_access allow localnet
-http_access allow localhost
-
-# Deny all other access
-http_access deny all
-
-# Squid normally listens on port 3128
+# Listen on port 3128
 http_port 3128
+
+# Allow all access - no restrictions for VPN proxy
+http_access allow all
 
 # Forward requests to Server1 as parent proxy
 cache_peer $SERVER1_IP parent 3128 0 no-query default
@@ -108,64 +82,47 @@ cache_peer $SERVER1_IP parent 3128 0 no-query default
 prefer_direct off
 never_direct allow all
 
-# Performance optimizations
-cache_mem 256 MB
-maximum_object_size_in_memory 64 KB
-maximum_object_size 1024 MB
+# Disable caching completely (perfect for VPN)
+cache deny all
 
-# Cache directory
-cache_dir ufs /var/spool/squid 1000 16 256
+# Minimal logging to avoid permission issues
+access_log stdio:/dev/stdout
+cache_log /dev/null
 
-# Leave coredumps in the first cache dir
-coredump_dir /var/spool/squid
-
-# Enable access logging
-access_log /var/log/squid/access.log squid
-
-# Enable cache logging
-cache_log /var/log/squid/cache.log
-
-# Forward all requests without modification
-forwarded_for on
-
-# Set visible hostname
+# Basic settings
 visible_hostname vpn-server2
-
-# DNS settings
 dns_nameservers 8.8.8.8 8.8.4.4
 
-# Connection limits
+# Performance settings
 client_lifetime 1 hour
 half_closed_clients off
 
-# Security headers
+# Security headers (optional for VPN)
 request_header_access Via deny all
 request_header_access X-Forwarded-For deny all
 EOF
 
-# Create squid user and set permissions
-echo "Setting up squid user and permissions..."
-if ! id squid &>/dev/null; then
-    useradd -r -s /bin/false squid
-fi
+# Stop squid if it's running (in case it was auto-started during package installation)
+echo "Stopping squid service (if running)..."
+systemctl stop squid 2>/dev/null || true
+pkill -f squid 2>/dev/null || true
 
-# Create cache directory
-mkdir -p /var/spool/squid
-chown -R squid:squid /var/spool/squid
-chmod 750 /var/spool/squid
+# Create systemd override to skip cache initialization (since we disabled caching)
+echo "Creating systemd override..."
+mkdir -p /etc/systemd/system/squid.service.d
+cat > /etc/systemd/system/squid.service.d/override.conf << 'EOF'
+[Service]
+ExecStartPre=
+ExecStartPre=/usr/sbin/squid --foreground -f /etc/squid/squid.conf -k parse
+EOF
 
-# Create log directory
-mkdir -p /var/log/squid
-chown -R squid:squid /var/log/squid
+# Reload systemd
+systemctl daemon-reload
 
-# Initialize squid cache
-echo "Initializing squid cache..."
-squid -z
-
-# Enable and start squid service
+# Enable and start squid service (no cache initialization needed)
 echo "Starting squid service..."
 systemctl enable squid
-systemctl restart squid
+systemctl start squid
 
 # Configure firewall
 echo "Configuring firewall..."
