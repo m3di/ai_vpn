@@ -10,6 +10,9 @@ jobs:
   release:
     runs-on: ubuntu-latest
     
+    permissions:
+      contents: write
+      
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -238,13 +241,11 @@ jobs:
         fi
         
     - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ steps.get_version.outputs.version }}
-        release_name: VPN Server Package ${{ steps.get_version.outputs.version }}
+        name: VPN Server Package ${{ steps.get_version.outputs.version }}
+        make_latest: true
         body: |
           # VPN Server Installation Package
           
@@ -289,35 +290,11 @@ jobs:
           
           **⚠️ Install Server1 first, then Server2!**
           
+        files: |
+          release/server1.zip
+          release/server2.zip
+          release/README.md
         draft: false
         prerelease: false
-        
-    - name: Upload server1.zip
-      uses: actions/upload-release-asset@v1
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./release/server1.zip
-        asset_name: server1.zip
-        asset_content_type: application/zip
-        
-    - name: Upload server2.zip
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./release/server2.zip
-        asset_name: server2.zip
-        asset_content_type: application/zip
-        
-    - name: Upload README
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./release/README.md
-        asset_name: README.md
-        asset_content_type: text/markdown 
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
