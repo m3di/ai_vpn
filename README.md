@@ -137,10 +137,10 @@ For production deployment on actual Ubuntu servers, this repository includes aut
 1. **Get the latest release packages:**
    ```bash
    # Download server1 package
-   wget https://github.com/YOUR_USERNAME/YOUR_REPO/releases/latest/download/server1.zip
+   wget https://github.com/m3di/ai_vpn/releases/latest/download/server1.zip
    
    # Download server2 package  
-   wget https://github.com/YOUR_USERNAME/YOUR_REPO/releases/latest/download/server2.zip
+   wget https://github.com/m3di/ai_vpn/releases/latest/download/server2.zip
    ```
 
 2. **Install Server1 (Exit Point) first:**
