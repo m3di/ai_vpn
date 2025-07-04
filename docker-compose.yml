@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  internet:
+    build: ./internet
+    ports:
+      - "8080:80"
+    networks:
+      - vpn-network
+    container_name: internet-server
+
+  server1:
+    build: ./server1
+    networks:
+      - vpn-network
+    container_name: vpn-server1
+    depends_on:
+      - internet
+
+  server2:
+    build: ./server2
+    networks:
+      - vpn-network
+    container_name: vpn-server2
+    depends_on:
+      - server1
+
+  client:
+    build: ./client
+    networks:
+      - vpn-network
+    container_name: vpn-client
+    depends_on:
+      - internet
+      - server1
+      - server2
+    stdin_open: true
+    tty: true
+
+networks:
+  vpn-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16 
