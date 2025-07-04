@@ -2,6 +2,8 @@
 
 This project demonstrates a VPN-like setup using 4 Docker containers representing real-world computers in multiple locations.
 
+🚀 **For production deployment on Ubuntu servers, see [Production Deployment](#production-deployment) section below.**
+
 ## Architecture
 
 ```
@@ -120,4 +122,117 @@ docker-compose down
 
 - **Check container status**: `docker-compose ps`
 - **View logs**: `docker logs <container-name>`
-- **Access container shell**: `docker exec -it <container-name> sh` 
+- **Access container shell**: `docker exec -it <container-name> sh`
+
+---
+
+## Production Deployment
+
+### 🏗️ Deploy on Real Ubuntu Servers
+
+For production deployment on actual Ubuntu servers, this repository includes automated packaging and deployment scripts.
+
+#### Quick Production Setup
+
+1. **Get the latest release packages:**
+   ```bash
+   # Download server1 package
+   wget https://github.com/YOUR_USERNAME/YOUR_REPO/releases/latest/download/server1.zip
+   
+   # Download server2 package  
+   wget https://github.com/YOUR_USERNAME/YOUR_REPO/releases/latest/download/server2.zip
+   ```
+
+2. **Install Server1 (Exit Point) first:**
+   ```bash
+   unzip server1.zip
+   cd server1
+   chmod +x install.sh
+   sudo ./install.sh
+   ```
+
+3. **Install Server2 (Entry Point) second:**
+   ```bash
+   unzip server2.zip
+   cd server2
+   chmod +x install.sh
+   sudo ./install.sh
+   # Enter Server1 IP when prompted
+   ```
+
+#### Creating New Releases
+
+To create a new release with installation packages:
+
+1. **Create and push a version tag:**
+   ```bash
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+
+2. **GitHub Actions will automatically:**
+   - Create a release
+   - Package server1 and server2 into zip files
+   - Upload installation packages as release assets
+   - Generate deployment documentation
+
+#### Manual Release
+
+You can also trigger a release manually:
+1. Go to **Actions** tab in GitHub
+2. Select **Create VPN Server Release**
+3. Click **Run workflow**
+
+### 📦 What's Included in Releases
+
+Each release contains:
+- **server1.zip** - Complete installation package for VPN exit point
+- **server2.zip** - Complete installation package for VPN entry point
+- **README.md** - Detailed deployment instructions
+- Installation scripts with automatic configuration
+- Firewall setup and security hardening
+- Service management and monitoring tools
+
+### 🔧 Production Features
+
+- **Automatic service startup** on boot
+- **Firewall configuration** with UFW
+- **Performance optimization** for production loads
+- **Security hardening** with proper user isolation
+- **Logging and monitoring** capabilities
+- **Connection validation** between servers
+- **Easy management commands** for operations
+
+### 🧪 Testing Production Setup
+
+After deployment, test the VPN chain:
+
+```bash
+# Test from any machine
+curl --proxy SERVER2_IP:3128 https://httpbin.org/ip
+
+# Should return Server1's IP address
+```
+
+### 🛡️ Security Considerations
+
+- Servers run with minimal required permissions
+- Firewall blocks all unnecessary ports
+- Traffic logging for monitoring and debugging
+- Secure inter-server communication
+- Regular security updates recommended
+
+### 📊 Monitoring
+
+Monitor your VPN servers:
+
+```bash
+# Check service status
+sudo systemctl status squid
+
+# View real-time logs
+sudo tail -f /var/log/squid/access.log
+
+# Check connections
+sudo netstat -tlnp | grep 3128
+``` 

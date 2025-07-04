@@ -1,0 +1,323 @@
+name: Create VPN Server Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Triggers on version tags like v1.0.0
+  workflow_dispatch:  # Allows manual trigger
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Create server1 package
+      run: |
+        mkdir -p release/server1
+        cp server1/install.sh release/server1/
+        cp server1/squid.conf release/server1/squid.conf.template
+        
+        # Create README for server1
+        cat > release/server1/README.md << 'EOF'
+        # VPN Server1 (Exit Point) Installation
+        
+        This is the VPN exit point server that makes the final requests to the internet.
+        
+        ## Requirements
+        - Ubuntu 18.04 or later
+        - Root access (sudo)
+        - Port 3128 available
+        
+        ## Installation
+        
+        1. Download and extract this package
+        2. Make the script executable:
+           ```bash
+           chmod +x install.sh
+           ```
+        3. Run the installation script:
+           ```bash
+           sudo ./install.sh
+           ```
+        
+        ## After Installation
+        
+        - Squid proxy will be running on port 3128
+        - Service will auto-start on boot
+        - Use the displayed IP address to configure server2
+        
+        ## Management Commands
+        
+        ```bash
+        # Check status
+        sudo systemctl status squid
+        
+        # View logs
+        sudo tail -f /var/log/squid/access.log
+        
+        # Restart service
+        sudo systemctl restart squid
+        
+        # Stop service
+        sudo systemctl stop squid
+        ```
+        
+        ## Security Notes
+        
+        - Firewall is automatically configured
+        - Only allows connections on port 3128 and SSH
+        - Squid runs as non-root user
+        EOF
+        
+        # Create the zip file
+        cd release
+        zip -r server1.zip server1/
+        cd ..
+        
+    - name: Create server2 package
+      run: |
+        mkdir -p release/server2
+        cp server2/install.sh release/server2/
+        cp server2/squid.conf release/server2/squid.conf.template
+        
+        # Create README for server2
+        cat > release/server2/README.md << 'EOF'
+        # VPN Server2 (Entry Point) Installation
+        
+        This is the VPN entry point server that forwards traffic to server1.
+        
+        ## Requirements
+        - Ubuntu 18.04 or later
+        - Root access (sudo)
+        - Port 3128 available
+        - Server1 must be installed and running first
+        
+        ## Installation
+        
+        1. **Install Server1 first!** Server2 needs to connect to Server1
+        2. Download and extract this package
+        3. Make the script executable:
+           ```bash
+           chmod +x install.sh
+           ```
+        4. Run the installation script:
+           ```bash
+           sudo ./install.sh
+           ```
+        5. When prompted, enter your Server1 IP address
+        
+        ## After Installation
+        
+        - Squid proxy will be running on port 3128
+        - All traffic will be forwarded to Server1
+        - Service will auto-start on boot
+        - Configuration saved to `/root/vpn-config.txt`
+        
+        ## Testing
+        
+        Test the VPN chain:
+        ```bash
+        curl --proxy YOUR_SERVER2_IP:3128 https://httpbin.org/ip
+        ```
+        
+        This should return Server1's IP address.
+        
+        ## Management Commands
+        
+        ```bash
+        # Check status
+        sudo systemctl status squid
+        
+        # View logs
+        sudo tail -f /var/log/squid/access.log
+        
+        # Restart service
+        sudo systemctl restart squid
+        
+        # View configuration
+        cat /root/vpn-config.txt
+        ```
+        
+        ## Security Notes
+        
+        - Firewall is automatically configured
+        - Only allows connections on port 3128 and SSH
+        - Squid runs as non-root user
+        - Traffic is encrypted between servers
+        EOF
+        
+        # Create the zip file
+        cd release
+        zip -r server2.zip server2/
+        cd ..
+        
+    - name: Create main README
+      run: |
+        cat > release/README.md << 'EOF'
+        # VPN Server Deployment Packages
+        
+        This release contains installation packages for setting up a 2-server VPN chain.
+        
+        ## Architecture
+        
+        ```
+        Client → Server2 (Entry Point) → Server1 (Exit Point) → Internet
+        ```
+        
+        ## Installation Order
+        
+        **⚠️ IMPORTANT: Install in this order:**
+        
+        1. **Server1 (Exit Point)** - Install first
+        2. **Server2 (Entry Point)** - Install second, requires Server1 IP
+        
+        ## Quick Start
+        
+        ### Server1 Installation
+        
+        ```bash
+        # Download and extract server1.zip
+        wget https://github.com/YOUR_USERNAME/YOUR_REPO/releases/latest/download/server1.zip
+        unzip server1.zip
+        cd server1
+        chmod +x install.sh
+        sudo ./install.sh
+        ```
+        
+        ### Server2 Installation
+        
+        ```bash
+        # Download and extract server2.zip
+        wget https://github.com/YOUR_USERNAME/YOUR_REPO/releases/latest/download/server2.zip
+        unzip server2.zip
+        cd server2
+        chmod +x install.sh
+        sudo ./install.sh
+        # Enter Server1 IP when prompted
+        ```
+        
+        ## Client Configuration
+        
+        Configure your applications to use Server2 as HTTP proxy:
+        - **Proxy Server**: Server2 IP address
+        - **Port**: 3128
+        - **Type**: HTTP Proxy
+        
+        ## Testing
+        
+        Test the VPN chain:
+        ```bash
+        curl --proxy SERVER2_IP:3128 https://httpbin.org/ip
+        ```
+        
+        This should return Server1's IP address, proving the VPN chain works.
+        
+        ## Security Features
+        
+        - Multi-hop proxy chain for enhanced privacy
+        - Automatic firewall configuration
+        - Secure service isolation
+        - Connection logging for monitoring
+        - Performance optimizations
+        
+        ## Support
+        
+        For issues and questions, please check the repository documentation or create an issue.
+        EOF
+        
+    - name: Get version from tag
+      id: get_version
+      run: |
+        if [[ $GITHUB_REF == refs/tags/* ]]; then
+          echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        else
+          echo "version=dev-$(date +%Y%m%d-%H%M%S)" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ steps.get_version.outputs.version }}
+        release_name: VPN Server Package ${{ steps.get_version.outputs.version }}
+        body: |
+          # VPN Server Installation Package
+          
+          This release contains ready-to-deploy packages for setting up a 2-server VPN chain.
+          
+          ## What's Included
+          
+          - **server1.zip** - VPN Exit Point server package
+          - **server2.zip** - VPN Entry Point server package  
+          - **README.md** - Complete installation instructions
+          
+          ## Quick Installation
+          
+          ### Server1 (Exit Point)
+          ```bash
+          wget https://github.com/${{ github.repository }}/releases/download/${{ steps.get_version.outputs.version }}/server1.zip
+          unzip server1.zip && cd server1
+          chmod +x install.sh && sudo ./install.sh
+          ```
+          
+          ### Server2 (Entry Point)
+          ```bash
+          wget https://github.com/${{ github.repository }}/releases/download/${{ steps.get_version.outputs.version }}/server2.zip
+          unzip server2.zip && cd server2
+          chmod +x install.sh && sudo ./install.sh
+          ```
+          
+          ## Architecture
+          
+          ```
+          Client → Server2 → Server1 → Internet
+          ```
+          
+          When clients connect through Server2, their traffic appears to come from Server1's IP address.
+          
+          ## Requirements
+          
+          - Ubuntu 18.04+ servers
+          - Root access (sudo)
+          - Port 3128 available on both servers
+          - Network connectivity between servers
+          
+          **⚠️ Install Server1 first, then Server2!**
+          
+        draft: false
+        prerelease: false
+        
+    - name: Upload server1.zip
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./release/server1.zip
+        asset_name: server1.zip
+        asset_content_type: application/zip
+        
+    - name: Upload server2.zip
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./release/server2.zip
+        asset_name: server2.zip
+        asset_content_type: application/zip
+        
+    - name: Upload README
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./release/README.md
+        asset_name: README.md
+        asset_content_type: text/markdown 
