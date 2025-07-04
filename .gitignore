@@ -23,7 +23,7 @@ Thumbs.db
 
 # Release artifacts
 release/
-*.zip
+*.tar.gz
 
 # Temporary files
 *.tmp

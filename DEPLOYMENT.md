@@ -37,10 +37,10 @@ Get the latest release packages from GitHub:
 
 ```bash
 # Download server1 package
-wget https://github.com/m3di/ai_vpn/releases/latest/download/server1.zip
+wget https://github.com/m3di/ai_vpn/releases/latest/download/server1.tar.gz
 
 # Download server2 package
-wget https://github.com/m3di/ai_vpn/releases/latest/download/server2.zip
+wget https://github.com/m3di/ai_vpn/releases/latest/download/server2.tar.gz
 ```
 
 ### 2. Install Server1 (Exit Point)
@@ -49,7 +49,7 @@ wget https://github.com/m3di/ai_vpn/releases/latest/download/server2.zip
 
 ```bash
 # Extract and install server1
-unzip server1.zip
+tar -xzf server1.tar.gz
 cd server1
 chmod +x install.sh
 sudo ./install.sh
@@ -70,7 +70,7 @@ sudo ./install.sh
 
 ```bash
 # Extract and install server2
-unzip server2.zip
+tar -xzf server2.tar.gz
 cd server2
 chmod +x install.sh
 sudo ./install.sh

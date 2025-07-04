@@ -75,9 +75,9 @@ jobs:
         - Squid runs as non-root user
         EOF
         
-        # Create the zip file
+        # Create the tar.gz file
         cd release
-        zip -r server1.zip server1/
+        tar -czf server1.tar.gz server1/
         cd ..
         
     - name: Create server2 package
@@ -152,9 +152,9 @@ jobs:
         - Traffic is encrypted between servers
         EOF
         
-        # Create the zip file
+        # Create the tar.gz file
         cd release
-        zip -r server2.zip server2/
+        tar -czf server2.tar.gz server2/
         cd ..
         
     - name: Create main README
@@ -182,9 +182,9 @@ jobs:
         ### Server1 Installation
         
         ```bash
-                 # Download and extract server1.zip
-         wget https://github.com/m3di/ai_vpn/releases/latest/download/server1.zip
-         unzip server1.zip
+                         # Download and extract server1.tar.gz
+        wget https://github.com/m3di/ai_vpn/releases/latest/download/server1.tar.gz
+        tar -xzf server1.tar.gz
          cd server1
          chmod +x install.sh
          sudo ./install.sh
@@ -193,9 +193,9 @@ jobs:
          ### Server2 Installation
          
          ```bash
-         # Download and extract server2.zip
-         wget https://github.com/m3di/ai_vpn/releases/latest/download/server2.zip
-         unzip server2.zip
+         # Download and extract server2.tar.gz
+         wget https://github.com/m3di/ai_vpn/releases/latest/download/server2.tar.gz
+         tar -xzf server2.tar.gz
          cd server2
          chmod +x install.sh
          sudo ./install.sh
@@ -253,23 +253,23 @@ jobs:
           
           ## What's Included
           
-          - **server1.zip** - VPN Exit Point server package
-          - **server2.zip** - VPN Entry Point server package  
+          - **server1.tar.gz** - VPN Exit Point server package
+          - **server2.tar.gz** - VPN Entry Point server package  
           - **README.md** - Complete installation instructions
           
           ## Quick Installation
           
           ### Server1 (Exit Point)
           ```bash
-          wget https://github.com/${{ github.repository }}/releases/download/${{ steps.get_version.outputs.version }}/server1.zip
-          unzip server1.zip && cd server1
+          wget https://github.com/${{ github.repository }}/releases/download/${{ steps.get_version.outputs.version }}/server1.tar.gz
+          tar -xzf server1.tar.gz && cd server1
           chmod +x install.sh && sudo ./install.sh
           ```
           
           ### Server2 (Entry Point)
           ```bash
-          wget https://github.com/${{ github.repository }}/releases/download/${{ steps.get_version.outputs.version }}/server2.zip
-          unzip server2.zip && cd server2
+          wget https://github.com/${{ github.repository }}/releases/download/${{ steps.get_version.outputs.version }}/server2.tar.gz
+          tar -xzf server2.tar.gz && cd server2
           chmod +x install.sh && sudo ./install.sh
           ```
           
@@ -291,8 +291,8 @@ jobs:
           **⚠️ Install Server1 first, then Server2!**
           
         files: |
-          release/server1.zip
-          release/server2.zip
+          release/server1.tar.gz
+          release/server2.tar.gz
           release/README.md
         draft: false
         prerelease: false

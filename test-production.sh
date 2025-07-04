@@ -14,16 +14,16 @@ echo ""
 echo "Testing URL accessibility..."
 echo ""
 
-# Test server1.zip URL
-echo "Testing server1.zip URL:"
-echo "  $RELEASE_URL/server1.zip"
-curl -I -s "$RELEASE_URL/server1.zip" | head -1
+# Test server1.tar.gz URL
+echo "Testing server1.tar.gz URL:"
+echo "  $RELEASE_URL/server1.tar.gz"
+curl -I -s "$RELEASE_URL/server1.tar.gz" | head -1
 echo ""
 
-# Test server2.zip URL  
-echo "Testing server2.zip URL:"
-echo "  $RELEASE_URL/server2.zip"
-curl -I -s "$RELEASE_URL/server2.zip" | head -1
+# Test server2.tar.gz URL
+echo "Testing server2.tar.gz URL:"
+echo "  $RELEASE_URL/server2.tar.gz"
+curl -I -s "$RELEASE_URL/server2.tar.gz" | head -1
 echo ""
 
 # Test README.md URL
@@ -37,13 +37,13 @@ echo ""
 
 cat << 'EOF'
 # Server1 Installation
-wget https://github.com/m3di/ai_vpn/releases/latest/download/server1.zip
-unzip server1.zip && cd server1
+wget https://github.com/m3di/ai_vpn/releases/latest/download/server1.tar.gz
+tar -xzf server1.tar.gz && cd server1
 chmod +x install.sh && sudo ./install.sh
 
 # Server2 Installation
-wget https://github.com/m3di/ai_vpn/releases/latest/download/server2.zip
-unzip server2.zip && cd server2
+wget https://github.com/m3di/ai_vpn/releases/latest/download/server2.tar.gz
+tar -xzf server2.tar.gz && cd server2
 chmod +x install.sh && sudo ./install.sh
 EOF
 

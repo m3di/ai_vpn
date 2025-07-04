@@ -137,15 +137,15 @@ For production deployment on actual Ubuntu servers, this repository includes aut
 1. **Get the latest release packages:**
    ```bash
    # Download server1 package
-   wget https://github.com/m3di/ai_vpn/releases/latest/download/server1.zip
+   wget https://github.com/m3di/ai_vpn/releases/latest/download/server1.tar.gz
    
    # Download server2 package  
-   wget https://github.com/m3di/ai_vpn/releases/latest/download/server2.zip
+   wget https://github.com/m3di/ai_vpn/releases/latest/download/server2.tar.gz
    ```
 
 2. **Install Server1 (Exit Point) first:**
    ```bash
-   unzip server1.zip
+   tar -xzf server1.tar.gz
    cd server1
    chmod +x install.sh
    sudo ./install.sh
@@ -153,7 +153,7 @@ For production deployment on actual Ubuntu servers, this repository includes aut
 
 3. **Install Server2 (Entry Point) second:**
    ```bash
-   unzip server2.zip
+   tar -xzf server2.tar.gz
    cd server2
    chmod +x install.sh
    sudo ./install.sh
@@ -172,7 +172,7 @@ To create a new release with installation packages:
 
 2. **GitHub Actions will automatically:**
    - Create a release
-   - Package server1 and server2 into zip files
+   - Package server1 and server2 into tar.gz files
    - Upload installation packages as release assets
    - Generate deployment documentation
 
@@ -186,8 +186,8 @@ You can also trigger a release manually:
 ### 📦 What's Included in Releases
 
 Each release contains:
-- **server1.zip** - Complete installation package for VPN exit point
-- **server2.zip** - Complete installation package for VPN entry point
+- **server1.tar.gz** - Complete installation package for VPN exit point
+- **server2.tar.gz** - Complete installation package for VPN entry point
 - **README.md** - Detailed deployment instructions
 - Installation scripts with automatic configuration
 - Firewall setup and security hardening
