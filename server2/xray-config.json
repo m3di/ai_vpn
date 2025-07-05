@@ -35,10 +35,34 @@
       },
       "streamSettings": {
         "network": "tcp",
-        "security": "none",
+        "security": "tls",
+        "tlsSettings": {
+          "allowInsecure": true,
+          "serverName": "cloudflare.com",
+          "fingerprint": "chrome",
+          "alpn": ["h2", "http/1.1"]
+        },
         "tcpSettings": {
           "header": {
-            "type": "none"
+            "type": "http",
+            "request": {
+              "version": "1.1",
+              "method": "GET",
+              "path": ["/", "/index.html", "/api/v1/status"],
+              "headers": {
+                "Host": ["cloudflare.com", "www.cloudflare.com"],
+                "User-Agent": [
+                  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+                  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+                ],
+                "Accept": [
+                  "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8"
+                ],
+                "Accept-Language": ["en-US,en;q=0.9"],
+                "Accept-Encoding": ["gzip, deflate, br"],
+                "Connection": ["keep-alive"]
+              }
+            }
           }
         }
       },
@@ -46,19 +70,79 @@
     },
     {
       "protocol": "freedom",
-      "settings": {},
+      "settings": {
+        "domainStrategy": "UseIPv4",
+        "timeout": 10
+      },
+      "streamSettings": {
+        "sockopt": {
+          "mark": 0,
+          "tcpFastOpen": true,
+          "tcpKeepAliveInterval": 30
+        }
+      },
       "tag": "direct"
+    },
+    {
+      "protocol": "blackhole",
+      "settings": {},
+      "tag": "blocked"
     }
   ],
   "routing": {
+    "domainStrategy": "IPIfNonMatch",
     "rules": [
       {
         "type": "field",
-        "inboundTag": [
-          "http-in"
+        "ip": [
+          "127.0.0.1/32",
+          "10.0.0.0/8",
+          "172.16.0.0/12",
+          "192.168.0.0/16"
         ],
+        "outboundTag": "blocked"
+      },
+      {
+        "type": "field",
+        "inboundTag": ["http-in"],
         "outboundTag": "vmess-out"
+      },
+      {
+        "type": "field",
+        "network": "tcp,udp",
+        "outboundTag": "direct"
       }
     ]
+  },
+  "dns": {
+    "servers": [
+      {
+        "address": "1.1.1.1",
+        "port": 53
+      },
+      {
+        "address": "8.8.8.8",
+        "port": 53
+      },
+      "localhost"
+    ]
+  },
+  "policy": {
+    "levels": {
+      "0": {
+        "handshake": 4,
+        "connIdle": 300,
+        "uplinkOnly": 2,
+        "downlinkOnly": 5,
+        "bufferSize": 10240
+      },
+      "1": {
+        "handshake": 4,
+        "connIdle": 300,
+        "uplinkOnly": 2,
+        "downlinkOnly": 5,
+        "bufferSize": 10240
+      }
+    }
   }
 } 

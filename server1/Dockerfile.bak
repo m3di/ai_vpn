@@ -20,10 +20,6 @@ RUN mkdir -p /etc/xray /var/log/xray
 
 # Copy Xray configuration and startup script
 COPY xray-config.json /etc/xray/config.json
-
-# Copy certificates
-COPY certs/server.crt /etc/xray/server.crt
-COPY certs/server.key /etc/xray/server.key
 COPY start-xray.sh /usr/local/bin/start-xray
 RUN chmod +x /usr/local/bin/start-xray
 

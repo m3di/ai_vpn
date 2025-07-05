@@ -39,21 +39,45 @@ jobs:
           echo "version_tag=$VERSION" >> $GITHUB_OUTPUT
         fi
         
+    - name: Prepare enhanced anti-censorship configuration
+      run: |
+        echo "Preparing enhanced anti-censorship configuration..."
+        
+        # Deploy enhanced configurations for production build
+        if [ -f "server1/xray-config-enhanced.json" ] && [ -f "server2/xray-config-enhanced.json" ]; then
+          echo "Using enhanced anti-censorship configurations"
+          cp server1/xray-config-enhanced.json server1/xray-config.json
+          cp server2/xray-config-enhanced.json server2/xray-config.json
+          
+          # Generate certificates for server1
+          mkdir -p server1/certs
+          openssl req -x509 -newkey rsa:4096 \
+            -keyout server1/certs/server.key \
+            -out server1/certs/server.crt \
+            -days 365 -nodes \
+            -subj "/C=US/ST=CA/L=San Francisco/O=Cloudflare Inc/CN=cloudflare.com"
+          
+          echo "✓ Enhanced anti-censorship configuration deployed"
+          echo "✓ TLS certificates generated for server1"
+        else
+          echo "Enhanced configurations not found, using basic configurations"
+        fi
+        
     - name: Build and push Docker images
       run: |
         DOCKER_REPO="m3di/ai-vpn"
         VERSION_TAG="${{ steps.get_version.outputs.version_tag }}"
         
-        # Build and push server1 image
-        echo "Building server1 image..."
+        # Build and push server1 image with enhanced anti-censorship
+        echo "Building server1 image with anti-censorship features..."
         docker buildx build --platform linux/amd64,linux/arm64 \
           -t "${DOCKER_REPO}:server1-${VERSION_TAG}" \
           -t "${DOCKER_REPO}:server1-latest" \
           --push \
           -f server1/Dockerfile server1/
         
-        # Build and push server2 image
-        echo "Building server2 image..."
+        # Build and push server2 image with enhanced anti-censorship
+        echo "Building server2 image with anti-censorship features..."
         docker buildx build --platform linux/amd64,linux/arm64 \
           -t "${DOCKER_REPO}:server2-${VERSION_TAG}" \
           -t "${DOCKER_REPO}:server2-latest" \
@@ -323,9 +347,18 @@ jobs:
         name: VPN Docker Release ${{ steps.get_version.outputs.version }}
         make_latest: true
         body: |
-          # VPN Docker Release
+          # VPN Docker Release - Enhanced Anti-Censorship Edition
           
-          This release contains production-ready Docker images and deployment files for the VPN proxy chain with VMess protocol.
+          This release contains production-ready Docker images and deployment files for the VPN proxy chain with **Enhanced Anti-Censorship VMess Protocol**.
+          
+          ## 🛡️ Anti-Censorship Features
+          
+          - **TLS Obfuscation**: VMess traffic encrypted with TLS and appears as legitimate HTTPS
+          - **HTTP Header Masquerading**: Traffic mimics cloudflare.com requests for evasion
+          - **Certificate Spoofing**: Self-signed certificates with legitimate subjects
+          - **Traffic Pattern Obfuscation**: Realistic timing and request patterns
+          - **Port 443 Usage**: Standard HTTPS port for better evasion
+          - **Deep Packet Inspection (DPI) Resistance**: Designed to bypass SSL connection timeouts
           
           ## 🐳 Docker Images
           
@@ -367,11 +400,13 @@ jobs:
           
           ## ✨ Features
           
-          - **VMess Protocol**: Enhanced security with protocol obfuscation
+          - **Enhanced VMess Protocol**: Anti-censorship VMess with TLS obfuscation
+          - **SSL Timeout Prevention**: Specifically designed to bypass SSL connection timeouts
+          - **Network Censorship Resistance**: HTTP header masquerading and traffic obfuscation
           - **Docker Deployment**: Easy deployment and scaling
           - **Health Checks**: Automatic service monitoring
           - **Resource Limits**: Production-ready resource management
-          - **Persistent Logs**: Volume-mounted logging
+          - **Persistent Logs**: Volume-mounted logging with V2Ray client configuration info
           - **Auto-Restart**: Containers restart on failure
           - **Multi-Platform**: AMD64 and ARM64 support
           
