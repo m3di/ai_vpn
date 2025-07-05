@@ -249,6 +249,129 @@ check_ip_addresses() {
     fi
 }
 
+# Function to test SSL connection timeouts and network censorship
+test_ssl_censorship() {
+    echo ""
+    echo "=== SSL Connection & Network Censorship Tests ==="
+    
+    print_status "INFO" "Testing SSL connection timeout scenarios..."
+    
+    # Test 1: Direct HTTPS with timeout detection
+    print_status "INFO" "Testing direct HTTPS connection with timeout detection..."
+    timeout_output=$(docker exec vpn-client timeout 10 curl -vvv -k https://internet-server:443/ 2>&1)
+    if echo "$timeout_output" | grep -q "SSL connection timeout"; then
+        print_status "FAIL" "Direct HTTPS: SSL connection timeout detected"
+    elif echo "$timeout_output" | grep -q "TLS handshake"; then
+        print_status "PASS" "Direct HTTPS: TLS handshake successful"
+    else
+        print_status "WARN" "Direct HTTPS: Connection succeeded but no TLS info found"
+    fi
+    
+    # Test 2: HTTPS via VMess with detailed timeout analysis
+    print_status "INFO" "Testing HTTPS via VMess with timeout analysis..."
+    vmess_timeout_output=$(docker exec vpn-client timeout 15 curl -vvv -k --proxy http://vpn-server2:3128 https://internet-server:443/ 2>&1)
+    if echo "$vmess_timeout_output" | grep -q "SSL connection timeout"; then
+        print_status "FAIL" "VMess HTTPS: SSL connection timeout detected"
+        print_status "WARN" "This may indicate network censorship or DPI interference"
+    elif echo "$vmess_timeout_output" | grep -q "TLS handshake"; then
+        print_status "PASS" "VMess HTTPS: TLS handshake successful"
+    else
+        print_status "WARN" "VMess HTTPS: Unexpected connection behavior"
+    fi
+    
+    # Test 3: External HTTPS site testing
+    print_status "INFO" "Testing external HTTPS sites for censorship detection..."
+    
+    # Test httpbin.org
+    print_status "INFO" "Testing httpbin.org HTTPS via VMess..."
+    httpbin_result=$(docker exec vpn-client timeout 20 curl -s -k --proxy http://vpn-server2:3128 https://httpbin.org/ip 2>&1)
+    if echo "$httpbin_result" | grep -q "origin"; then
+        print_status "PASS" "httpbin.org HTTPS via VMess: Working"
+        echo "Response: $httpbin_result"
+    elif echo "$httpbin_result" | grep -q "SSL connection timeout"; then
+        print_status "FAIL" "httpbin.org HTTPS via VMess: SSL timeout (possible censorship)"
+    else
+        print_status "FAIL" "httpbin.org HTTPS via VMess: Connection failed"
+    fi
+    
+    # Test 4: Compare HTTP vs HTTPS success rates
+    print_status "INFO" "Comparing HTTP vs HTTPS success rates..."
+    
+    http_success=0
+    https_success=0
+    
+    for i in {1..3}; do
+        if docker exec vpn-client curl -s -f -m 10 --proxy http://vpn-server2:3128 http://httpbin.org/ip >/dev/null 2>&1; then
+            http_success=$((http_success + 1))
+        fi
+        
+        if docker exec vpn-client curl -s -f -k -m 15 --proxy http://vpn-server2:3128 https://httpbin.org/ip >/dev/null 2>&1; then
+            https_success=$((https_success + 1))
+        fi
+    done
+    
+    print_status "INFO" "HTTP success rate: $http_success/3"
+    print_status "INFO" "HTTPS success rate: $https_success/3"
+    
+    if [ $http_success -eq 3 ] && [ $https_success -eq 0 ]; then
+        print_status "WARN" "HTTP working but HTTPS failing - Strong indication of HTTPS censorship"
+    elif [ $http_success -eq 3 ] && [ $https_success -lt 3 ]; then
+        print_status "WARN" "HTTP more reliable than HTTPS - Possible partial HTTPS censorship"
+    elif [ $http_success -eq 3 ] && [ $https_success -eq 3 ]; then
+        print_status "PASS" "Both HTTP and HTTPS working reliably"
+    else
+        print_status "FAIL" "General connectivity issues detected"
+    fi
+}
+
+# Function to test advanced anti-censorship features
+test_anti_censorship() {
+    echo ""
+    echo "=== Anti-Censorship Feature Tests ==="
+    
+    print_status "INFO" "Testing VMess with different configurations..."
+    
+    # Test 1: Check if VMess is using standard TLS port (443) - good for evasion
+    print_status "INFO" "Checking VMess port configuration..."
+    if docker exec vpn-client nc -z vpn-server1 443 2>/dev/null; then
+        print_status "PASS" "VMess using port 443 (standard HTTPS port - good for evasion)"
+    else
+        print_status "FAIL" "VMess port 443 not accessible"
+    fi
+    
+    # Test 2: Protocol detection test
+    print_status "INFO" "Testing protocol detection resistance..."
+    
+    # Send raw data to VMess port and check response
+    vmess_probe=$(docker exec vpn-client timeout 5 nc -w 1 vpn-server1 443 < /dev/null 2>&1)
+    if echo "$vmess_probe" | grep -q "HTTP\|html\|server"; then
+        print_status "WARN" "VMess might be detectable (returns HTTP-like response)"
+    else
+        print_status "PASS" "VMess appears to be protocol-obfuscated (no clear HTTP response)"
+    fi
+    
+    # Test 3: Traffic analysis resistance
+    print_status "INFO" "Testing traffic pattern analysis..."
+    
+    # Make multiple requests and check for timing patterns
+    start_time=$(date +%s.%N)
+    for i in {1..5}; do
+        docker exec vpn-client curl -s -f -m 10 --proxy http://vpn-server2:3128 http://httpbin.org/ip >/dev/null 2>&1
+    done
+    end_time=$(date +%s.%N)
+    
+    total_time=$(echo "$end_time - $start_time" | bc -l 2>/dev/null || echo "0")
+    avg_time=$(echo "scale=3; $total_time / 5" | bc -l 2>/dev/null || echo "0")
+    
+    print_status "INFO" "Average request time: ${avg_time}s"
+    
+    if [ $(echo "$avg_time > 1.0" | bc -l 2>/dev/null || echo "0") -eq 1 ]; then
+        print_status "WARN" "Slow response times may indicate throttling or analysis"
+    else
+        print_status "PASS" "Response times appear normal"
+    fi
+}
+
 # Function to run performance tests
 run_performance_tests() {
     echo ""
@@ -309,6 +432,10 @@ main() {
     check_ip_addresses
     run_performance_tests
     
+    # Run new SSL and censorship tests
+    test_ssl_censorship
+    test_anti_censorship
+    
     # Run Python comprehensive tests
     run_python_tests
     
@@ -329,6 +456,8 @@ show_help() {
     echo "  advanced      Run advanced protocol tests"
     echo "  tcp           Run TCP connection tests"
     echo "  vmess         Run VMess protocol tests"
+    echo "  ssl           Run SSL timeout and censorship tests"
+    echo "  censorship    Run anti-censorship feature tests"
     echo "  python        Run Python comprehensive tests"
     echo "  performance   Run performance tests"
     echo "  ip            Check IP addresses"
@@ -353,6 +482,12 @@ case "$1" in
         ;;
     "vmess")
         check_vmess_connectivity
+        ;;
+    "ssl")
+        test_ssl_censorship
+        ;;
+    "censorship")
+        test_anti_censorship
         ;;
     "python")
         run_python_tests
