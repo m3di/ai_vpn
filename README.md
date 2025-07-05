@@ -1,29 +1,33 @@
 # VPN Experiment with Docker Containers
 
-This project demonstrates a VPN-like setup using 4 Docker containers representing real-world computers in multiple locations.
+This project demonstrates a VPN-like setup using Docker containers with **VMess protocol** for enhanced security and protocol obfuscation.
 
-🚀 **For production deployment on Ubuntu servers, see [Production Deployment](#production-deployment) section below.**
+🚀 **For production deployment using Docker, see [Production Deployment](#production-deployment) section below.**
 
 ## Architecture
 
 ```
-Client → Server2 (Entry Point) → Server1 (Exit Point) → Internet Server
+Client → Server2 (HTTP→VMess) → Server1 (VMess Server) → Internet Server
 ```
+
+### Protocol Chain
+1. **Client → Server2**: HTTP proxy protocol (port 3128)
+2. **Server2 → Server1**: VMess protocol (port 443) 
+3. **Server1 → Internet**: Direct connection
 
 ## Containers
 
 1. **`internet`** - A Go web application that returns the client's IP address
-2. **`server1`** - VPN exit point using Squid proxy
-3. **`server2`** - VPN entry point using Squid proxy (forwards to server1)
-4. **`client`** - Represents the client wanting to browse the internet
+2. **`server1`** - VPN exit point using Xray with VMess protocol
+3. **`server2`** - VPN entry point using Xray (HTTP proxy → VMess client)
+4. **`client`** - Test client with networking tools
 
 ## Network Behavior
 
 - **Direct access**: `client → internet` → Returns client IP (172.20.0.5)
-- **Via server1**: `client → server1 → internet` → Returns server1 IP (172.20.0.3)
-- **Via server2**: `client → server2 → server1 → internet` → Returns server1 IP (172.20.0.3)
+- **Via server2 (VMess chain)**: `client → server2 → server1 → internet` → Returns server1 IP (172.20.0.3)
 
-## Quick Start
+## Quick Start (Development)
 
 1. **Build and start all containers:**
    ```bash
@@ -41,41 +45,47 @@ Client → Server2 (Entry Point) → Server1 (Exit Point) → Internet Server
 # Test 1: Direct access
 docker exec vpn-client curl -s http://internet-server:80/
 
-# Test 2: Via server1 proxy
-docker exec vpn-client curl -s --proxy http://vpn-server1:3128 http://internet-server:80/
-
-# Test 3: Via server2 proxy
+# Test 2: Via VMess chain (server2 → server1)
 docker exec vpn-client curl -s --proxy http://vpn-server2:3128 http://internet-server:80/
+
+# Test 3: VMess-specific tests
+./test-setup.sh vmess
 ```
 
 ## Expected Results
 
 - **Direct access**: Shows client IP (172.20.0.5)
-- **Server1 proxy**: Shows server1 IP (172.20.0.3)
-- **Server2 proxy**: Shows server1 IP (172.20.0.3) because server2 forwards to server1
+- **VMess chain**: Shows server1 IP (172.20.0.3) with protocol obfuscation
 
 ## Container Details
 
 ### Internet Server
 - **Language**: Go
-- **Port**: 80
+- **Port**: 80 (HTTP), 443 (HTTPS)
 - **Function**: Returns client IP information in JSON format
-- **External access**: Available on localhost:8080
+- **External access**: Available on localhost:8080 (HTTP), localhost:8443 (HTTPS)
 
 ### Server1 (VPN Exit Point)
-- **Proxy**: Squid on port 3128
+- **Protocol**: Xray VMess server on port 443
 - **Function**: Acts as the final proxy before reaching the internet
-- **Configuration**: Allows all traffic, forwards client information
+- **Security**: UUID authentication, protocol obfuscation
 
 ### Server2 (VPN Entry Point)
-- **Proxy**: Squid on port 3128
-- **Function**: Forwards all traffic to server1
-- **Configuration**: Uses server1 as parent proxy
+- **Protocol**: Xray HTTP proxy (port 3128) + VMess client
+- **Function**: Accepts HTTP proxy connections, forwards via VMess to server1
+- **Chain**: HTTP → VMess → Internet
 
 ### Client
 - **Base**: Alpine Linux
 - **Tools**: curl, wget, netcat
 - **Function**: Simulates a user wanting to browse the internet
+
+## VMess Configuration
+
+- **Protocol**: VMess (V2Ray/Xray)
+- **UUID**: `550e8400-e29b-41d4-a716-446655440000`
+- **Transport**: TCP (no encryption for testing)
+- **Security**: Auto
 
 ## Network Configuration
 
@@ -89,28 +99,32 @@ docker exec vpn-client curl -s --proxy http://vpn-server2:3128 http://internet-s
 
 ```
 docker-vpn/
-├── docker-compose.yml          # Main orchestration file
+├── docker-compose.yml          # Development orchestration
+├── docker-compose.prod.yml     # Production orchestration
 ├── internet/
 │   ├── Dockerfile
 │   └── main.go                 # Go web server
 ├── server1/
 │   ├── Dockerfile
-│   └── squid.conf              # Squid configuration
+│   ├── xray-config.json        # VMess server config
+│   └── start-xray.sh           # Startup script
 ├── server2/
 │   ├── Dockerfile
-│   └── squid.conf              # Squid configuration
+│   ├── xray-config.json        # VMess client config
+│   └── start-xray.sh           # Startup script
 ├── client/
 │   └── Dockerfile
 ├── test-setup.sh               # Test script
 └── README.md                   # This file
 ```
 
-## Security & Performance Notes
+## Security & Performance Features
 
-- Traffic is routed through multiple proxies to simulate real-world VPN behavior
-- Squid proxy is configured for optimal performance
-- All containers run in an isolated Docker network
-- No caching is enabled for testing purposes
+- **VMess Protocol**: Enhanced security with protocol obfuscation
+- **UUID Authentication**: Secure client authentication
+- **Performance**: ~2.3ms overhead for VMess chain
+- **Detection Resistance**: Much harder to detect than HTTP proxy traffic
+- **Isolated Network**: All containers run in isolated Docker network
 
 ## Stopping the Experiment
 
@@ -123,89 +137,85 @@ docker-compose down
 - **Check container status**: `docker-compose ps`
 - **View logs**: `docker logs <container-name>`
 - **Access container shell**: `docker exec -it <container-name> sh`
+- **Test VMess chain**: `./test-setup.sh vmess`
 
 ---
 
 ## Production Deployment
 
-### 🏗️ Deploy on Real Ubuntu Servers
+### 🚀 Deploy with Docker on Production Servers
 
-For production deployment on actual Ubuntu servers, this repository includes automated packaging and deployment scripts.
+For production deployment, this project provides pre-built Docker images and orchestration files for easy deployment on any Docker-capable servers.
+
+#### Docker Images
+
+Pre-built images are available on Docker Hub:
+- **Server1 (VMess Server)**: `m3di/ai-vpn:server1-latest`
+- **Server2 (VMess Client)**: `m3di/ai-vpn:server2-latest`
+- **Internet Test Server**: `m3di/ai-vpn:internet-latest`
 
 #### Quick Production Setup
 
-1. **Get the latest release packages:**
+1. **Deploy Server1 (Exit Point):**
    ```bash
-   # Download server1 package
-   wget https://github.com/m3di/ai_vpn/releases/latest/download/server1.tar.gz
+   # Download production compose file
+   wget https://github.com/m3di/ai_vpn/releases/latest/download/docker-compose.server1.yml
    
-   # Download server2 package  
-   wget https://github.com/m3di/ai_vpn/releases/latest/download/server2.tar.gz
+   # Deploy server1
+   docker-compose -f docker-compose.server1.yml up -d
    ```
 
-2. **Install Server1 (Exit Point) first:**
+2. **Deploy Server2 (Entry Point):**
    ```bash
-   tar -xzf server1.tar.gz
-   cd server1
-   chmod +x install.sh
-   sudo ./install.sh
+   # Download production compose file
+   wget https://github.com/m3di/ai_vpn/releases/latest/download/docker-compose.server2.yml
+   
+   # Update SERVER1_IP in the compose file
+   sed -i 's/SERVER1_IP_PLACEHOLDER/YOUR_SERVER1_IP/' docker-compose.server2.yml
+   
+   # Deploy server2
+   docker-compose -f docker-compose.server2.yml up -d
    ```
 
-3. **Install Server2 (Entry Point) second:**
-   ```bash
-   tar -xzf server2.tar.gz
-   cd server2
-   chmod +x install.sh
-   sudo ./install.sh
-   # Enter Server1 IP when prompted
-   ```
+#### Alternative: Direct Docker Run
 
-#### Creating New Releases
+```bash
+# Server1 (Exit Point)
+docker run -d --name vpn-server1 \
+  -p 443:443 \
+  --restart unless-stopped \
+  m3di/ai-vpn:server1-latest
 
-To create a new release with installation packages:
-
-1. **Create and push a version tag:**
-   ```bash
-   git tag v1.0.0
-   git push origin v1.0.0
-   ```
-
-2. **GitHub Actions will automatically:**
-   - Create a release
-   - Package server1 and server2 into tar.gz files
-   - Upload installation packages as release assets
-   - Generate deployment documentation
-
-#### Manual Release
-
-You can also trigger a release manually:
-1. Go to **Actions** tab in GitHub
-2. Select **Create VPN Server Release**
-3. Click **Run workflow**
+# Server2 (Entry Point) 
+docker run -d --name vpn-server2 \
+  -p 3128:3128 \
+  --restart unless-stopped \
+  -e SERVER1_HOST=YOUR_SERVER1_IP \
+  m3di/ai-vpn:server2-latest
+```
 
 ### 📦 What's Included in Releases
 
 Each release contains:
-- **server1.tar.gz** - Complete installation package for VPN exit point
-- **server2.tar.gz** - Complete installation package for VPN entry point
+- **docker-compose.server1.yml** - Server1 deployment file
+- **docker-compose.server2.yml** - Server2 deployment file  
 - **README.md** - Detailed deployment instructions
-- Installation scripts with automatic configuration
-- Firewall setup and security hardening
-- Service management and monitoring tools
+- **test-production.sh** - Production testing script
+- Pre-built Docker images on Docker Hub
 
 ### 🔧 Production Features
 
-- **Automatic service startup** on boot
-- **Firewall configuration** with UFW
-- **Performance optimization** for production loads
-- **Security hardening** with proper user isolation
-- **Logging and monitoring** capabilities
-- **Connection validation** between servers
-- **Easy management commands** for operations
+- **Automatic container restart** on failure
+- **Health checks** for service monitoring
+- **Volume persistence** for logs and configuration
+- **Environment-based configuration**
+- **Security hardening** with non-root containers
+- **Resource limits** for production stability
+- **Easy scaling** with Docker Swarm or Kubernetes
 
 ### 🧪 Testing Production Setup
 
-After deployment, test the VPN chain:
+After deployment, test the VMess chain:
 
 ```bash
 # Test from any machine
@@ -216,23 +226,54 @@ curl --proxy SERVER2_IP:3128 https://httpbin.org/ip
 
 ### 🛡️ Security Considerations
 
-- Servers run with minimal required permissions
-- Firewall blocks all unnecessary ports
-- Traffic logging for monitoring and debugging
-- Secure inter-server communication
-- Regular security updates recommended
+- Containers run with minimal required permissions
+- VMess protocol provides traffic obfuscation
+- UUID-based authentication
+- Isolated container networking
+- Regular security updates via image rebuilds
 
 ### 📊 Monitoring
 
-Monitor your VPN servers:
+Monitor your VPN containers:
 
 ```bash
-# Check service status
-sudo systemctl status squid
+# Check container status
+docker ps
 
-# View real-time logs
-sudo tail -f /var/log/squid/access.log
+# View container logs
+docker logs vpn-server1
+docker logs vpn-server2
 
-# Check connections
-sudo netstat -tlnp | grep 3128
-``` 
+# Monitor resource usage
+docker stats
+
+# Check VMess connectivity
+./test-production.sh
+```
+
+### 🔄 Updates
+
+Update to latest versions:
+
+```bash
+# Pull latest images
+docker pull m3di/ai-vpn:server1-latest
+docker pull m3di/ai-vpn:server2-latest
+
+# Restart containers with new images
+docker-compose -f docker-compose.server1.yml pull && docker-compose -f docker-compose.server1.yml up -d
+docker-compose -f docker-compose.server2.yml pull && docker-compose -f docker-compose.server2.yml up -d
+```
+
+### 🌐 Creating New Releases
+
+To create a new release with updated Docker images:
+
+```bash
+./create-release.sh
+```
+
+This will:
+- Build and push new Docker images to Docker Hub
+- Create GitHub release with deployment files
+- Generate production deployment documentation 

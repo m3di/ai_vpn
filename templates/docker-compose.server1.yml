@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  vpn-server1:
+    image: m3di/ai-vpn:server1-latest
+    container_name: vpn-server1
+    restart: unless-stopped
+    ports:
+      - "443:443"
+    environment:
+      - LOG_LEVEL=info
+      - VMESS_UUID=550e8400-e29b-41d4-a716-446655440000
+    volumes:
+      - vpn-server1-logs:/var/log/xray
+    networks:
+      - vpn-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "443"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+volumes:
+  vpn-server1-logs:
+    driver: local
+
+networks:
+  vpn-network:
+    driver: bridge 
