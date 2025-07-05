@@ -2,6 +2,111 @@
 
 This guide covers deploying the VPN proxy chain using Docker containers on production servers with VMess protocol for enhanced security.
 
+## Prerequisites
+
+### Fresh Ubuntu Server Setup
+
+If you're starting with a fresh Ubuntu server, follow these steps to install all required dependencies.
+
+#### 1. Update System Packages
+
+```bash
+# Update package list and upgrade system
+sudo apt update && sudo apt upgrade -y
+
+# Install basic utilities
+sudo apt install -y curl wget git unzip
+```
+
+#### 2. Install Docker
+
+```bash
+# Remove any old Docker installations
+sudo apt remove docker docker-engine docker.io containerd runc 2>/dev/null || true
+
+# Install Docker using the official script (recommended)
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+
+# Add your user to the docker group (optional, allows running Docker without sudo)
+sudo usermod -aG docker $USER
+
+# Start and enable Docker service
+sudo systemctl start docker
+sudo systemctl enable docker
+
+# Verify Docker installation
+sudo docker --version
+sudo docker run hello-world
+```
+
+#### 3. Install Docker Compose
+
+```bash
+# Install Docker Compose (latest version)
+sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+
+# Make it executable
+sudo chmod +x /usr/local/bin/docker-compose
+
+# Create a symlink for easier access (optional)
+sudo ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose
+
+# Verify Docker Compose installation
+docker-compose --version
+```
+
+#### 4. Configure Firewall (UFW)
+
+```bash
+# Install and configure UFW firewall
+sudo apt install -y ufw
+
+# Configure firewall rules based on server role
+# For Server1 (Exit Point):
+sudo ufw allow 22/tcp    # SSH
+sudo ufw allow 443/tcp   # VMess server port
+
+# For Server2 (Entry Point):
+sudo ufw allow 22/tcp    # SSH  
+sudo ufw allow 3128/tcp  # HTTP proxy port
+
+# Enable firewall
+sudo ufw --force enable
+
+# Check firewall status
+sudo ufw status
+```
+
+#### 5. Optional: Log out and back in
+
+If you added your user to the docker group, log out and back in for the changes to take effect:
+
+```bash
+# Log out and back in, or use:
+newgrp docker
+
+# Test Docker without sudo
+docker --version
+docker ps
+```
+
+#### 6. Verify Complete Installation
+
+```bash
+# Test that everything works
+docker --version
+docker-compose --version
+docker run hello-world
+```
+
+You should see output similar to:
+```
+Docker version 24.0.7, build afdd53b
+Docker Compose version v2.21.0
+Hello from Docker!
+```
+
 ## Overview
 
 The VPN setup consists of two Docker containers:

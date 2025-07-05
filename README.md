@@ -154,6 +154,19 @@ Pre-built images are available on Docker Hub:
 - **Server2 (VMess Client)**: `m3di/ai-vpn:server2-latest`
 - **Internet Test Server**: `m3di/ai-vpn:internet-latest`
 
+#### Prerequisites (Fresh Ubuntu Server)
+
+For a fresh Ubuntu server, install Docker and requirements first:
+
+```bash
+# Quick setup script (installs Docker, Docker Compose, configures firewall)
+wget https://raw.githubusercontent.com/m3di/ai_vpn/main/install-requirements.sh
+chmod +x install-requirements.sh
+./install-requirements.sh
+
+# Or follow manual instructions in DEPLOYMENT.md
+```
+
 #### Quick Production Setup
 
 1. **Deploy Server1 (Exit Point):**
