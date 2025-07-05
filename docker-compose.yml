@@ -5,6 +5,7 @@ services:
     build: ./internet
     ports:
       - "8080:80"
+      - "8443:443"
     networks:
       - vpn-network
     container_name: internet-server
