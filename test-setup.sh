@@ -2,7 +2,7 @@
 
 echo "=== VPN Proxy Chain Comprehensive Test Suite ==="
 echo "This script tests HTTP, HTTPS, file transfers, and TCP connections"
-echo "through various proxy configurations."
+echo "through various proxy configurations including VMess protocol."
 echo ""
 
 # Color codes for output
@@ -60,6 +60,42 @@ wait_for_service() {
     return 1
 }
 
+# Function to check VMess connectivity
+check_vmess_connectivity() {
+    echo ""
+    echo "=== VMess Protocol Tests ==="
+    
+    print_status "INFO" "Checking VMess server (server1) logs..."
+    docker logs vpn-server1 --tail 10 2>/dev/null | grep -i "vmess\|xray\|listening\|started" | head -3
+    
+    print_status "INFO" "Checking VMess client (server2) logs..."
+    docker logs vpn-server2 --tail 10 2>/dev/null | grep -i "vmess\|xray\|listening\|started" | head -3
+    
+    print_status "INFO" "Testing VMess connection chain..."
+    
+    # Test if server1 VMess port is accessible from server2
+    if docker exec vpn-server2 nc -z vpn-server1 443 2>/dev/null; then
+        print_status "PASS" "VMess port 443 accessible from server2"
+    else
+        print_status "FAIL" "VMess port 443 NOT accessible from server2"
+    fi
+    
+    # Test if server2 HTTP proxy port is accessible from client
+    if docker exec vpn-client nc -z vpn-server2 3128 2>/dev/null; then
+        print_status "PASS" "HTTP proxy port 3128 accessible from client"
+    else
+        print_status "FAIL" "HTTP proxy port 3128 NOT accessible from client"
+    fi
+    
+    # Test the full VMess chain with a simple HTTP request
+    print_status "INFO" "Testing full VMess chain (Client → Server2 HTTP → Server1 VMess → Internet)..."
+    if docker exec vpn-client curl -s -f -m 15 --proxy http://vpn-server2:3128 http://internet-server:80/status >/dev/null 2>&1; then
+        print_status "PASS" "Full VMess proxy chain working"
+    else
+        print_status "FAIL" "Full VMess proxy chain failed"
+    fi
+}
+
 # Function to run basic curl tests
 run_curl_tests() {
     echo ""
@@ -73,20 +109,20 @@ run_curl_tests() {
         print_status "FAIL" "Direct HTTP connection"
     fi
     
-    # Test 2: HTTP via server1
-    print_status "INFO" "Testing HTTP via server1 proxy..."
+    # Test 2: HTTP via server1 (now VMess) - this should fail as server1 no longer accepts HTTP proxy
+    print_status "INFO" "Testing HTTP via server1 (VMess - should fail)..."
     if docker exec vpn-client curl -s -f -m 10 --proxy http://vpn-server1:3128 http://internet-server:80/ >/dev/null 2>&1; then
-        print_status "PASS" "HTTP via server1 proxy"
+        print_status "WARN" "HTTP via server1 unexpectedly succeeded (VMess server should not accept HTTP proxy)"
     else
-        print_status "FAIL" "HTTP via server1 proxy"
+        print_status "PASS" "HTTP via server1 correctly failed (VMess server doesn't accept HTTP proxy)"
     fi
     
-    # Test 3: HTTP via server2 (full chain)
-    print_status "INFO" "Testing HTTP via server2 proxy (full chain)..."
-    if docker exec vpn-client curl -s -f -m 10 --proxy http://vpn-server2:3128 http://internet-server:80/ >/dev/null 2>&1; then
-        print_status "PASS" "HTTP via server2 proxy (full chain)"
+    # Test 3: HTTP via server2 (full VMess chain)
+    print_status "INFO" "Testing HTTP via server2 (VMess chain)..."
+    if docker exec vpn-client curl -s -f -m 15 --proxy http://vpn-server2:3128 http://internet-server:80/ >/dev/null 2>&1; then
+        print_status "PASS" "HTTP via server2 (VMess chain)"
     else
-        print_status "FAIL" "HTTP via server2 proxy (full chain)"
+        print_status "FAIL" "HTTP via server2 (VMess chain)"
     fi
     
     # Test 4: HTTPS tests
@@ -99,18 +135,11 @@ run_curl_tests() {
         print_status "FAIL" "Direct HTTPS connection"
     fi
     
-    # HTTPS via server1
-    if docker exec vpn-client curl -s -f -k -m 10 --proxy http://vpn-server1:3128 https://internet-server:443/ >/dev/null 2>&1; then
-        print_status "PASS" "HTTPS via server1 proxy"
+    # HTTPS via server2 (VMess chain)
+    if docker exec vpn-client curl -s -f -k -m 15 --proxy http://vpn-server2:3128 https://internet-server:443/ >/dev/null 2>&1; then
+        print_status "PASS" "HTTPS via server2 (VMess chain)"
     else
-        print_status "FAIL" "HTTPS via server1 proxy"
-    fi
-    
-    # HTTPS via server2
-    if docker exec vpn-client curl -s -f -k -m 10 --proxy http://vpn-server2:3128 https://internet-server:443/ >/dev/null 2>&1; then
-        print_status "PASS" "HTTPS via server2 proxy (full chain)"
-    else
-        print_status "FAIL" "HTTPS via server2 proxy (full chain)"
+        print_status "FAIL" "HTTPS via server2 (VMess chain)"
     fi
 }
 
@@ -119,28 +148,28 @@ run_advanced_tests() {
     echo ""
     echo "=== Advanced Protocol Tests ==="
     
-    # Test file download
-    print_status "INFO" "Testing file download..."
-    if docker exec vpn-client curl -s -f -m 10 http://internet-server:80/download -o /tmp/test_download.txt >/dev/null 2>&1; then
-        print_status "PASS" "File download test"
+    # Test file download via VMess chain
+    print_status "INFO" "Testing file download via VMess chain..."
+    if docker exec vpn-client curl -s -f -m 15 --proxy http://vpn-server2:3128 http://internet-server:80/download -o /tmp/test_download.txt >/dev/null 2>&1; then
+        print_status "PASS" "File download via VMess chain"
     else
-        print_status "FAIL" "File download test"
+        print_status "FAIL" "File download via VMess chain"
     fi
     
-    # Test file upload
-    print_status "INFO" "Testing file upload..."
-    if docker exec vpn-client curl -s -f -m 10 -X POST -d "test upload data" http://internet-server:80/upload >/dev/null 2>&1; then
-        print_status "PASS" "File upload test"
+    # Test file upload via VMess chain
+    print_status "INFO" "Testing file upload via VMess chain..."
+    if docker exec vpn-client curl -s -f -m 15 --proxy http://vpn-server2:3128 -X POST -d "test upload data via VMess" http://internet-server:80/upload >/dev/null 2>&1; then
+        print_status "PASS" "File upload via VMess chain"
     else
-        print_status "FAIL" "File upload test"
+        print_status "FAIL" "File upload via VMess chain"
     fi
     
-    # Test status endpoint
-    print_status "INFO" "Testing status endpoint..."
-    if docker exec vpn-client curl -s -f -m 10 http://internet-server:80/status >/dev/null 2>&1; then
-        print_status "PASS" "Status endpoint test"
+    # Test status endpoint via VMess chain
+    print_status "INFO" "Testing status endpoint via VMess chain..."
+    if docker exec vpn-client curl -s -f -m 15 --proxy http://vpn-server2:3128 http://internet-server:80/status >/dev/null 2>&1; then
+        print_status "PASS" "Status endpoint via VMess chain"
     else
-        print_status "FAIL" "Status endpoint test"
+        print_status "FAIL" "Status endpoint via VMess chain"
     fi
 }
 
@@ -166,17 +195,18 @@ run_tcp_tests() {
         print_status "FAIL" "Direct TCP connection to HTTPS port"
     fi
     
-    # TCP to proxy servers
-    if docker exec vpn-client nc -z vpn-server1 3128 2>/dev/null; then
-        print_status "PASS" "TCP connection to server1 proxy"
+    # TCP to server1 VMess port
+    if docker exec vpn-client nc -z vpn-server1 443 2>/dev/null; then
+        print_status "PASS" "TCP connection to server1 VMess port (443)"
     else
-        print_status "FAIL" "TCP connection to server1 proxy"
+        print_status "FAIL" "TCP connection to server1 VMess port (443)"
     fi
     
+    # TCP to server2 HTTP proxy port
     if docker exec vpn-client nc -z vpn-server2 3128 2>/dev/null; then
-        print_status "PASS" "TCP connection to server2 proxy"
+        print_status "PASS" "TCP connection to server2 HTTP proxy port (3128)"
     else
-        print_status "FAIL" "TCP connection to server2 proxy"
+        print_status "FAIL" "TCP connection to server2 HTTP proxy port (3128)"
     fi
 }
 
@@ -202,15 +232,21 @@ check_ip_addresses() {
     
     # Direct connection
     echo "Direct connection IP:"
-    docker exec vpn-client curl -s http://internet-server:80/ | jq -r '.client_ip' 2>/dev/null || echo "Failed to get IP"
+    docker exec vpn-client curl -s http://internet-server:80/ | grep -o '"client_ip":"[^"]*"' | cut -d'"' -f4 2>/dev/null || echo "Failed to get IP"
     
-    # Via server1
-    echo "Via server1 proxy IP:"
-    docker exec vpn-client curl -s --proxy http://vpn-server1:3128 http://internet-server:80/ | jq -r '.client_ip' 2>/dev/null || echo "Failed to get IP"
+    # Via server2 (VMess chain - should show server1's IP)
+    echo "Via server2 (VMess chain) IP:"
+    docker exec vpn-client curl -s --proxy http://vpn-server2:3128 http://internet-server:80/ | grep -o '"client_ip":"[^"]*"' | cut -d'"' -f4 2>/dev/null || echo "Failed to get IP"
     
-    # Via server2 (should show server1's IP)
-    echo "Via server2 proxy IP (should show server1's IP):"
-    docker exec vpn-client curl -s --proxy http://vpn-server2:3128 http://internet-server:80/ | jq -r '.client_ip' 2>/dev/null || echo "Failed to get IP"
+    # Test if the IPs are different (indicating the proxy is working)
+    direct_ip=$(docker exec vpn-client curl -s http://internet-server:80/ | grep -o '"client_ip":"[^"]*"' | cut -d'"' -f4 2>/dev/null)
+    proxy_ip=$(docker exec vpn-client curl -s --proxy http://vpn-server2:3128 http://internet-server:80/ | grep -o '"client_ip":"[^"]*"' | cut -d'"' -f4 2>/dev/null)
+    
+    if [ "$direct_ip" != "$proxy_ip" ] && [ -n "$direct_ip" ] && [ -n "$proxy_ip" ]; then
+        print_status "PASS" "IP addresses are different - VMess proxy chain is working"
+    else
+        print_status "FAIL" "IP addresses are the same or failed to retrieve - VMess proxy chain may not be working"
+    fi
 }
 
 # Function to run performance tests
@@ -227,18 +263,20 @@ run_performance_tests() {
     direct_time=$(docker exec vpn-client curl -s -w "%{time_total}" -o /dev/null http://internet-server:80/ 2>/dev/null)
     echo "Direct connection: ${direct_time}s"
     
-    # Via server1
-    server1_time=$(docker exec vpn-client curl -s -w "%{time_total}" -o /dev/null --proxy http://vpn-server1:3128 http://internet-server:80/ 2>/dev/null)
-    echo "Via server1: ${server1_time}s"
+    # Via server2 (VMess chain)
+    vmess_time=$(docker exec vpn-client curl -s -w "%{time_total}" -o /dev/null --proxy http://vpn-server2:3128 http://internet-server:80/ 2>/dev/null)
+    echo "Via server2 (VMess chain): ${vmess_time}s"
     
-    # Via server2
-    server2_time=$(docker exec vpn-client curl -s -w "%{time_total}" -o /dev/null --proxy http://vpn-server2:3128 http://internet-server:80/ 2>/dev/null)
-    echo "Via server2 (full chain): ${server2_time}s"
+    # Calculate overhead
+    if [ -n "$direct_time" ] && [ -n "$vmess_time" ]; then
+        overhead=$(echo "$vmess_time - $direct_time" | bc -l 2>/dev/null || echo "calculation failed")
+        echo "VMess overhead: ${overhead}s"
+    fi
 }
 
 # Main execution function
 main() {
-    echo "Starting comprehensive VPN proxy chain testing..."
+    echo "Starting comprehensive VPN proxy chain testing with VMess protocol..."
     echo ""
     
     # Check if all containers are running
@@ -258,8 +296,11 @@ main() {
     # Wait for services to be ready
     wait_for_service "internet-server" 80 "HTTP service"
     wait_for_service "internet-server" 443 "HTTPS service"
-    wait_for_service "vpn-server1" 3128 "Server1 proxy"
-    wait_for_service "vpn-server2" 3128 "Server2 proxy"
+    wait_for_service "vpn-server1" 443 "Server1 VMess service"
+    wait_for_service "vpn-server2" 3128 "Server2 HTTP proxy"
+    
+    # Run VMess-specific tests first
+    check_vmess_connectivity
     
     # Run all test suites
     run_curl_tests
@@ -274,6 +315,7 @@ main() {
     echo ""
     echo "=== Test Suite Complete ==="
     print_status "INFO" "Check the output above for any failed tests"
+    print_status "INFO" "VMess protocol is now used between server2 and server1"
     print_status "INFO" "Detailed Python test results saved in container at /tmp/test_results.json"
 }
 
@@ -286,6 +328,7 @@ show_help() {
     echo "  curl          Run only basic cURL tests"
     echo "  advanced      Run advanced protocol tests"
     echo "  tcp           Run TCP connection tests"
+    echo "  vmess         Run VMess protocol tests"
     echo "  python        Run Python comprehensive tests"
     echo "  performance   Run performance tests"
     echo "  ip            Check IP addresses"
@@ -307,6 +350,9 @@ case "$1" in
         ;;
     "tcp")
         run_tcp_tests
+        ;;
+    "vmess")
+        check_vmess_connectivity
         ;;
     "python")
         run_python_tests

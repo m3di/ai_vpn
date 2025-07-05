@@ -1,18 +1,23 @@
-# VPN Proxy Chain Test Environment
+# VPN Proxy Chain Test Environment (with VMess Protocol)
 
 ## Overview
-This Docker-based test environment simulates a VPN proxy chain with comprehensive testing capabilities for multiple protocols and services.
+This Docker-based test environment simulates a VPN proxy chain with VMess protocol support and comprehensive testing capabilities for multiple protocols and services.
 
 ## Architecture
 ```
-Client Container → Server2 Proxy → Server1 Proxy → Internet Server
+Client Container → Server2 (HTTP→VMess) → Server1 (VMess Server) → Internet Server
 ```
 
 ### Container Roles
 - **Client Container**: Test client with curl and networking tools
-- **Server2 (VPN Entry Point)**: Squid proxy that forwards to Server1
-- **Server1 (VPN Exit Point)**: Squid proxy that connects to Internet
+- **Server2 (VPN Entry Point)**: Xray proxy accepting HTTP proxy connections, forwarding via VMess to Server1
+- **Server1 (VPN Exit Point)**: Xray VMess server that connects to Internet
 - **Internet Server**: Multi-service test server with HTTP/HTTPS endpoints
+
+### Protocol Chain
+1. **Client → Server2**: HTTP proxy protocol (port 3128)
+2. **Server2 → Server1**: VMess protocol (port 443)
+3. **Server1 → Internet**: Direct connection (freedom outbound)
 
 ## Services Available
 
@@ -39,16 +44,22 @@ Client Container → Server2 Proxy → Server1 Proxy → Internet Server
    - Accepts POST requests for upload testing
    - Returns upload size and metadata
 
+### VMess Configuration
+- **Protocol**: VMess (V2Ray/Xray)
+- **UUID**: `550e8400-e29b-41d4-a716-446655440000`
+- **Port**: 443 (Server1)
+- **Security**: Auto
+- **Transport**: TCP (no encryption for testing)
+
 ### External Access
 - HTTP: `http://localhost:8080/`
 - HTTPS: `https://localhost:8443/`
 
 ## IP Address Verification
-The test environment allows you to verify the VPN proxy chain is working by observing different client IPs:
+The test environment allows you to verify the VMess proxy chain is working by observing different client IPs:
 
 - **Direct Connection**: Shows client container IP (`172.20.0.5`)
-- **Via Server1**: Shows Server1 IP (`172.20.0.3`)
-- **Via Server2**: Shows Server1 IP (`172.20.0.3`) - confirms traffic goes through the full chain
+- **Via Server2 (VMess Chain)**: Shows Server1 IP (`172.20.0.3`) - confirms traffic goes through the full VMess chain
 
 ## Testing
 
@@ -57,53 +68,60 @@ The test environment allows you to verify the VPN proxy chain is working by obse
 # Start all containers
 docker-compose up -d
 
-# Run comprehensive tests
+# Run comprehensive tests (including VMess)
 ./test-setup.sh
 
 # Run specific test categories
 ./test-setup.sh curl      # Basic HTTP/HTTPS tests
-./test-setup.sh advanced  # File transfer tests
+./test-setup.sh advanced  # File transfer tests via VMess
 ./test-setup.sh tcp       # TCP connection tests
+./test-setup.sh vmess     # VMess protocol specific tests
 ./test-setup.sh ip        # IP address verification
 ./test-setup.sh performance  # Performance comparison
 ```
 
+### VMess-Specific Testing
+```bash
+# Test VMess protocol chain
+./test-setup.sh vmess
+
+# Check VMess connectivity
+docker exec vpn-server2 nc -z vpn-server1 443
+
+# View VMess server logs
+docker logs vpn-server1
+docker logs vpn-server2
+```
+
 ### Manual Testing Examples
 
-#### Basic HTTP Test
+#### Basic HTTP Test (VMess Chain)
 ```bash
 # Direct connection
 docker exec vpn-client curl -s http://internet-server:80/
 
-# Via Server1 proxy
-docker exec vpn-client curl -s --proxy http://vpn-server1:3128 http://internet-server:80/
-
-# Via Server2 proxy (full chain)
+# Via Server2 (VMess chain) - this is now the only proxy option
 docker exec vpn-client curl -s --proxy http://vpn-server2:3128 http://internet-server:80/
+
+# Note: Server1 no longer accepts HTTP proxy connections (only VMess)
 ```
 
-#### HTTPS Test
+#### HTTPS Test (VMess Chain)
 ```bash
 # Direct HTTPS
 docker exec vpn-client curl -s -k https://internet-server:443/
 
-# HTTPS via proxy
+# HTTPS via VMess chain
 docker exec vpn-client curl -s -k --proxy http://vpn-server2:3128 https://internet-server:443/
 ```
 
-#### File Transfer Tests
+#### File Transfer Tests (VMess Chain)
 ```bash
-# Download test
-docker exec vpn-client curl -s http://internet-server:80/download | head -5
+# Download test via VMess
+docker exec vpn-client curl -s --proxy http://vpn-server2:3128 http://internet-server:80/download | head -5
 
-# Upload test
-docker exec vpn-client curl -s -X POST -d "test data" http://internet-server:80/upload
-```
-
-#### Service Status
-```bash
-# Check available services
-docker exec vpn-client curl -s http://internet-server:80/status
+# Upload test via VMess
+docker exec vpn-client curl -s --proxy http://vpn-server2:3128 -X POST -d "test data" http://internet-server:80/upload
 ```
 
 ## Test Script Features
@@ -112,49 +130,84 @@ The `test-setup.sh` script includes:
 
 1. **Container Status Verification**: Checks all containers are running
 2. **Service Readiness**: Waits for services to be available
-3. **Comprehensive Testing**: Tests multiple protocols and endpoints
-4. **IP Verification**: Confirms proxy chain is working
-5. **Performance Testing**: Compares response times across configurations
-6. **Colored Output**: Clear pass/fail indicators
-7. **Modular Testing**: Run specific test categories
+3. **VMess Protocol Testing**: Specific tests for VMess connectivity
+4. **Comprehensive Testing**: Tests multiple protocols and endpoints via VMess
+5. **IP Verification**: Confirms VMess proxy chain is working
+6. **Performance Testing**: Compares response times across configurations
+7. **Colored Output**: Clear pass/fail indicators
+8. **Modular Testing**: Run specific test categories including VMess tests
 
 ## Expected Results
 
-### Working VPN Chain Indicators
-- ✅ All containers start successfully
-- ✅ TCP connections work to all services
-- ✅ HTTP requests succeed through all proxy configurations
-- ✅ HTTPS requests work with TLS 1.3
-- ✅ Different client IPs are reported based on proxy path
-- ✅ File uploads/downloads work through proxies
-- ✅ Response times increase slightly through proxy chain
+### Working VMess Chain Indicators
+- ✅ All containers start successfully with Xray
+- ✅ VMess port 443 accessible from server2 to server1
+- ✅ HTTP proxy port 3128 accessible from client to server2
+- ✅ HTTP requests succeed through VMess chain
+- ✅ HTTPS requests work with TLS 1.3 through VMess
+- ✅ Different client IPs are reported (proving VMess chain works)
+- ✅ File uploads/downloads work through VMess chain
+- ✅ Server1 correctly rejects direct HTTP proxy connections
+
+### VMess Protocol Verification
+- ✅ Server1 logs show VMess server starting
+- ✅ Server2 logs show VMess client connections
+- ✅ Traffic flows: Client → HTTP Proxy → VMess → Internet
+- ✅ IP masking works correctly through VMess
 
 ### Troubleshooting
-- If tests fail, check container logs: `docker logs <container-name>`
+- Check Xray logs: `docker logs vpn-server1` and `docker logs vpn-server2`
+- Verify VMess connectivity: `docker exec vpn-server2 nc -z vpn-server1 443`
+- Check VMess UUID matches in both configurations
 - Verify network connectivity: `docker exec vpn-client nc -z <host> <port>`
-- Check proxy configurations in `server1/squid.conf` and `server2/squid.conf`
 
 ## Performance Characteristics
 Typical response times observed:
 - Direct connection: ~0.001s
-- Via Server1: ~0.001s
-- Via Server2 (full chain): ~0.001s
+- Via VMess chain: ~0.002-0.005s
 
-The proxy chain adds minimal latency for testing purposes.
+The VMess protocol adds minimal latency but provides enhanced security and protocol obfuscation.
 
-## Security Notes
-- Uses self-signed certificates for HTTPS testing
-- Squid proxies configured for testing (not production security)
-- All traffic is contained within Docker network
+## Security Features
+
+### VMess Protocol Benefits
+- **Protocol Obfuscation**: VMess traffic is harder to detect than HTTP proxy
+- **UUID Authentication**: Secure client authentication
+- **Dynamic Port Support**: Can be configured on any port
+- **Advanced Routing**: Sophisticated traffic routing capabilities
+
+### Configuration Security
+- VMess UUID: `550e8400-e29b-41d4-a716-446655440000` (change for production)
+- No TLS encryption in test environment (add `"security": "tls"` for production)
+- Blackhole routing for private IP ranges
 
 ## Extending the Test Environment
 
-To add new services:
-1. Add endpoints to `internet/main.go`
-2. Update test scripts to include new endpoints
-3. Document new services in this file
+### Adding New VMess Features
+1. Enable TLS encryption in VMess streamSettings
+2. Add WebSocket transport for better firewall traversal
+3. Implement traffic obfuscation with different headers
+4. Add multiple VMess users with different UUIDs
 
-To add new protocols:
-1. Update internet server to support new protocols
-2. Add client-side testing tools to `client/Dockerfile`
-3. Create corresponding test functions in `test-setup.sh` 
+### Adding New Protocols
+1. Configure additional inbound protocols in Xray
+2. Add protocol-specific testing in test-setup.sh
+3. Update documentation for new protocol chains
+
+### Configuration Files
+- **Server1**: `server1/xray-config.json` (VMess server)
+- **Server2**: `server2/xray-config.json` (HTTP proxy + VMess client)
+- **Test Script**: `test-setup.sh` (includes VMess tests)
+
+## VMess vs HTTP Proxy Comparison
+
+| Feature | HTTP Proxy | VMess |
+|---------|------------|-------|
+| Detection Resistance | Low | High |
+| Protocol Overhead | Minimal | Low |
+| Configuration Complexity | Simple | Moderate |
+| Security | Basic | Advanced |
+| Firewall Traversal | Limited | Good |
+| Performance | Fastest | Fast |
+
+The VMess implementation provides a more realistic VPN scenario with enhanced security and protocol obfuscation capabilities. 

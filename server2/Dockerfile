@@ -1,18 +1,28 @@
-FROM alpine:latest
+FROM ubuntu:22.04
 
-# Install squid proxy
-RUN apk --no-cache add squid curl
+# Install necessary packages
+RUN apt-get update && apt-get install -y \
+    curl \
+    wget \
+    unzip \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy squid configuration
-COPY squid.conf /etc/squid/squid.conf
+# Install Xray
+RUN curl -L -o xray.zip https://github.com/XTLS/Xray-core/releases/download/v1.8.4/Xray-linux-64.zip && \
+    unzip xray.zip && \
+    chmod +x xray && \
+    mv xray /usr/local/bin/ && \
+    rm -f xray.zip
 
-# Create squid directories
-RUN mkdir -p /var/cache/squid /var/log/squid && \
-    chown -R squid:squid /var/cache/squid /var/log/squid
+# Create directories
+RUN mkdir -p /etc/xray /var/log/xray
 
-# Initialize squid cache
-RUN squid -z
+# Copy Xray configuration and startup script
+COPY xray-config.json /etc/xray/config.json
+COPY start-xray.sh /usr/local/bin/start-xray
+RUN chmod +x /usr/local/bin/start-xray
 
-EXPOSE 3128 8080
+EXPOSE 3128
 
-CMD ["squid", "-f", "/etc/squid/squid.conf", "-NYCd", "1"] 
+CMD ["/usr/local/bin/start-xray"] 
